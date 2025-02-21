@@ -1,0 +1,3 @@
+ClientName,Date,VendorRef,APAccountRef,DueDate,Amount
+Client1,2024-02-21,VEND123,2000,2024-03-21,500.00
+Client1,2024-02-21,VEND456,2000,2024-03-28,750.00
