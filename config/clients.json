@@ -1,0 +1,28 @@
+{
+  "Client1": {
+    "qboCredentials": {
+      "clientId": "YOUR_CLIENT_ID",
+      "clientSecret": "YOUR_CLIENT_SECRET",
+      "companyId": "YOUR_COMPANY_ID",
+      "environment": "production",
+      "refreshToken": "YOUR_REFRESH_TOKEN"
+    },
+    "defaultAccounts": {
+      "accountsPayable": "2000",
+      "unspecifiedExpense": "1000"
+    }
+  },
+  "Client2": {
+    "qboCredentials": {
+      "clientId": "YOUR_CLIENT_ID",
+      "clientSecret": "YOUR_CLIENT_SECRET",
+      "companyId": "YOUR_COMPANY_ID",
+      "environment": "production",
+      "refreshToken": "YOUR_REFRESH_TOKEN"
+    },
+    "defaultAccounts": {
+      "accountsPayable": "2000",
+      "unspecifiedExpense": "1000"
+    }
+  }
+}
