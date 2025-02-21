@@ -1,0 +1,327 @@
+{
+  "name": "QBO Batch Transaction Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/data/qbo/input",
+        "options": {
+          "includeSubfolders": true,
+          "filenameFilter": "*.csv"
+        }
+      },
+      "name": "Watch Folder",
+      "type": "n8n-nodes-base.watchFiles",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "filePath": "={{ $json.path }}"
+      },
+      "name": "Read Binary File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "headerRow": true,
+          "skipEmptyLines": true
+        }
+      },
+      "name": "CSV Parse",
+      "type": "n8n-nodes-base.csv",
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = item.json;\n\nlet transactionType;\nif (row.TransactionType) {\n  transactionType = row.TransactionType.toLowerCase();\n} else if (row.Debit && row.Credit) {\n  transactionType = 'journal';\n} else if (row.BillNumber || row.DueDate) {\n  transactionType = 'bill';\n} else if (row.PurchaseNumber || (row.Vendor && row.Amount)) {\n  transactionType = 'purchase';\n} else {\n  throw new Error('Unable to determine transaction type');\n}\n\nreturn {\n  json: {\n    ...item.json,\n    transactionType,\n    clientCredentials: `qbo_${row.ClientName.toLowerCase()}`\n  }\n};"
+      },
+      "name": "Transaction Type Detection",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "journal": [
+            {
+              "value1": "={{ $json.transactionType }}",
+              "value2": "journal"
+            }
+          ],
+          "bill": [
+            {
+              "value1": "={{ $json.transactionType }}",
+              "value2": "bill"
+            }
+          ],
+          "purchase": [
+            {
+              "value1": "={{ $json.transactionType }}",
+              "value2": "purchase"
+            }
+          ]
+        }
+      },
+      "name": "Route By Type",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "journalEntry",
+        "operation": "create",
+        "credentials": "={{ $json.clientCredentials }}",
+        "additionalFields": {
+          "Line": [
+            {
+              "DetailType": "JournalEntryLineDetail",
+              "Amount": "={{ $json.Debit }}",
+              "JournalEntryLineDetail": {
+                "PostingType": "Debit",
+                "AccountRef": "={{ $json.DebitAccount }}"
+              }
+            },
+            {
+              "DetailType": "JournalEntryLineDetail",
+              "Amount": "={{ $json.Credit }}",
+              "JournalEntryLineDetail": {
+                "PostingType": "Credit",
+                "AccountRef": "={{ $json.CreditAccount }}"
+              }
+            }
+          ]
+        }
+      },
+      "name": "QBO - Create Journal Entry",
+      "type": "n8n-nodes-base.quickbooks",
+      "position": [
+        1450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "bill",
+        "operation": "create",
+        "credentials": "={{ $json.clientCredentials }}",
+        "additionalFields": {
+          "VendorRef": "={{ $json.VendorRef }}",
+          "APAccountRef": "={{ $json.APAccountRef }}",
+          "DueDate": "={{ $json.DueDate }}",
+          "TotalAmt": "={{ $json.Amount }}"
+        }
+      },
+      "name": "QBO - Create Bill",
+      "type": "n8n-nodes-base.quickbooks",
+      "position": [
+        1450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "purchase",
+        "operation": "create",
+        "credentials": "={{ $json.clientCredentials }}",
+        "additionalFields": {
+          "PaymentType": "={{ $json.PaymentType || 'Check' }}",
+          "AccountRef": "={{ $json.AccountRef }}",
+          "VendorRef": "={{ $json.VendorRef }}",
+          "TotalAmt": "={{ $json.Amount }}"
+        }
+      },
+      "name": "QBO - Create Purchase",
+      "type": "n8n-nodes-base.quickbooks",
+      "position": [
+        1450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $execution.error.message }}",
+              "value2": ""
+            }
+          ]
+        }
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendFile",
+        "filePath": "/data/qbo/error-logs/errors.log",
+        "content": "={{ DateTime.now() + ' - Error processing ' + $json.ClientName + ': ' + $execution.error.message }}"
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.fileOperations",
+      "position": [
+        1850,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Watch Folder": {
+      "main": [
+        [
+          {
+            "node": "Read Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Binary File": {
+      "main": [
+        [
+          {
+            "node": "CSV Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CSV Parse": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Transaction Type Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transaction Type Detection": {
+      "main": [
+        [
+          {
+            "node": "Route By Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route By Type": {
+      "main": [
+        [
+          {
+            "node": "QBO - Create Journal Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "QBO - Create Bill",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "QBO - Create Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QBO - Create Journal Entry": {
+      "main": [
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QBO - Create Bill": {
+      "main": [
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QBO - Create Purchase": {
+      "main": [
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
