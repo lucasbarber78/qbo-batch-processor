@@ -1,0 +1,3 @@
+ClientName,Date,VendorRef,AccountRef,Amount,PaymentType
+Client1,2024-02-21,VEND123,1000,250.00,Check
+Client1,2024-02-21,VEND456,1001,175.50,Credit Card
